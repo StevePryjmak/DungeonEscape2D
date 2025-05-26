@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
-mod maze;
-use maze::Maze;
+pub mod maze; 
+use crate::maze::Maze;
 
 #[pymodule]
 fn dungeon_core(_py: Python, m: &PyModule) -> PyResult<()> {
