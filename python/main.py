@@ -24,7 +24,7 @@ DIRECTION_KEYS = {
 
 class DungeonGUI:
     def __init__(self, dungeon_rows, dungeon_cols, maze_width, maze_height):
-        self.player = Entity(int(maze_height/2), int(maze_width/2), 100, 0, 1,0, True)
+        self.player = Entity(int(maze_height/2), int(maze_width/2), 1, 0, 1,0, True)
         self.dungeon = Dungeon(dungeon_rows, dungeon_cols, maze_width, maze_height, self.player)
         self.maze_width = maze_width
         self.maze_height = maze_height
@@ -67,10 +67,10 @@ class DungeonGUI:
 
         # Prepare stat values
         stats = [
-            ("sword", str(self.player.attack)),
-            ("shield", str(self.player.armor)),
-            ("heart", str(self.player.health)),
-            ("coin", str(self.player.gold)),
+            ("sword", str(self.dungeon.player.attack)),
+            ("shield", str(self.dungeon.player.armor)),
+            ("heart", str(self.dungeon.player.health)),
+            ("coin", str(self.dungeon.player.gold)),
         ]
 
         # Draw background bar
@@ -85,6 +85,53 @@ class DungeonGUI:
             text_surface = font.render(value, True, (255, 255, 255))
             self.screen.blit(text_surface, (x, y + (icon.get_height() - font.get_height()) // 2))
             x += text_surface.get_width() + 20  # Space between stats
+    
+    def draw_enemy_info(self, enemy, mouse_pos):
+        font = pygame.font.SysFont("Arial", 18)
+        # Prepare stat icons and values
+        if not hasattr(self, "icon_images"):
+            def load_icon(name):
+                path = ICON_PATH + name + ".png"
+                img = pygame.image.load(path).convert_alpha()
+                return pygame.transform.smoothscale(img, (22, 22))
+            self.icon_images = {
+                "sword": load_icon("sword"),
+                "heart": load_icon("heart"),
+            }
+        stats = [
+            ("sword", str(enemy.attack)),
+            ("heart", str(enemy.health)),
+        ]
+        # Calculate width and height for the info box
+        padding = 8
+        spacing = 8
+        icon_w = 22
+        text_surfaces = [font.render(val, True, (30, 30, 30)) for _, val in stats]
+        width = sum(icon_w + spacing + ts.get_width() + spacing for ts in text_surfaces) - spacing
+        height = max(icon_w, font.get_height()) + padding * 2
+
+        # Position box near mouse, but keep inside window
+        x, y = mouse_pos[0] + 16, mouse_pos[1] + 16
+        if x + width > self.screen.get_width():
+            x = self.screen.get_width() - width - 4
+        if y + height > self.screen.get_height():
+            y = self.screen.get_height() - height - 4
+
+        # Draw rounded background
+        rect = pygame.Rect(x, y, width, height)
+        pygame.draw.rect(self.screen, (245, 245, 245), rect, border_radius=8)
+        pygame.draw.rect(self.screen, (80, 80, 80), rect, 2, border_radius=8)
+
+        # Draw icons and values
+        draw_x = x + padding
+        draw_y = y + (height - icon_w) // 2
+        for icon_name, val in stats:
+            icon = self.icon_images[icon_name]
+            self.screen.blit(icon, (draw_x, draw_y))
+            draw_x += icon_w + 4
+            text_surface = font.render(val, True, (30, 30, 30))
+            self.screen.blit(text_surface, (draw_x, y + (height - text_surface.get_height()) // 2))
+            draw_x += text_surface.get_width() + spacing
 
     def draw_maze(self, maze):
         for row in range(self.maze_height):
@@ -110,6 +157,18 @@ class DungeonGUI:
         x = PADDING + player.x * CELL_SIZE
         y = self.stats_height + PADDING + player.y * CELL_SIZE  # Offset by stats bar
         self.screen.blit(self.hero_image, (x, y))
+    
+    def draw_enemies(self, enemies):
+        # Load enemy image once and cache it
+        if not hasattr(self, "enemy_image"):
+            path = ICON_PATH + "enemy_bat.png"
+            img = pygame.image.load(path).convert_alpha()
+            self.enemy_image = pygame.transform.smoothscale(img, (CELL_SIZE, CELL_SIZE))
+        for enemy in enemies:
+            # Only draw enemies in the current room
+            x = PADDING + enemy.x * CELL_SIZE
+            y = self.stats_height + PADDING + enemy.y * CELL_SIZE
+            self.screen.blit(self.enemy_image, (x, y))
 
     def draw_minimap(self):
         # Top-left corner of minimap
@@ -138,6 +197,7 @@ class DungeonGUI:
 
     def run(self):
         running = True
+        # self.dungeon.spawn_enemies(5)  # Spawn enemies in the dungeon
         while running:
             self.screen.fill((0, 0, 0))
             maze = self.dungeon.current_maze()
@@ -145,9 +205,10 @@ class DungeonGUI:
             self.draw_maze(maze)
             self.draw_player(self.player)
             self.draw_minimap()
-            pygame.display.flip()
-            self.clock.tick(FPS)
+            self.draw_enemies(self.dungeon.enemies)
 
+            mouse_pos = pygame.mouse.get_pos()
+            hovered_enemy = None
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -155,8 +216,59 @@ class DungeonGUI:
                     direction = DIRECTION_KEYS.get(event.key)
                     if direction:
                         self.move_player(direction)
+            # After handling events, check if mouse is over any enemy
+            for enemy in self.dungeon.enemies:
+                enemy_rect = pygame.Rect(
+                    PADDING + enemy.x * CELL_SIZE,
+                    self.stats_height + PADDING + enemy.y * CELL_SIZE,
+                    CELL_SIZE, CELL_SIZE
+                )
+                if enemy_rect.collidepoint(mouse_pos):
+                    hovered_enemy = enemy
+                    break
+            if hovered_enemy:
+                self.draw_enemy_info(hovered_enemy, mouse_pos)
+            pygame.display.flip()
+            self.eng_check()
+            self.clock.tick(FPS)
 
         pygame.quit()
+    
+    def eng_check(self):
+        if self.dungeon.player.health <= 0:
+            font = pygame.font.SysFont("Arial", 48)
+            text = font.render("Game Over!", True, (255, 0, 0))
+            rect = text.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
+            self.screen.blit(text, rect)
+
+            # Draw Restart Button
+            button_font = pygame.font.SysFont("Arial", 36)
+            button_text = button_font.render("Restart", True, (255, 255, 255))
+            button_rect = pygame.Rect(0, 0, 200, 60)
+            button_rect.center = (self.screen.get_width() // 2, self.screen.get_height() // 2 + 100)
+            pygame.draw.rect(self.screen, (0, 128, 0), button_rect)
+            self.screen.blit(button_text, button_text.get_rect(center=button_rect.center))
+
+            pygame.display.flip()
+
+            waiting = True
+            while waiting:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        exit()
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        if button_rect.collidepoint(event.pos):
+                            # Reset other game variables
+                            self = DungeonGUI(
+                                dungeon_rows=self.dungeon_rows,
+                                dungeon_cols=self.dungeon_cols,
+                                maze_width=self.maze_width,
+                                maze_height=self.maze_height
+                            )
+                            return self.run()
+                pygame.time.wait(10)
+
 
 if __name__ == "__main__":
     gui = DungeonGUI(dungeon_rows=5, dungeon_cols=5, maze_width=11, maze_height=11)
