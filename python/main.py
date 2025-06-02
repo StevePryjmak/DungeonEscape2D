@@ -24,7 +24,7 @@ DIRECTION_KEYS = {
 
 class DungeonGUI:
     def __init__(self, dungeon_rows, dungeon_cols, maze_width, maze_height):
-        self.player = Entity(int(maze_height/2), int(maze_width/2), 1, 0, 1,0, True)
+        self.player = Entity(int(maze_height/2), int(maze_width/2), 100, 0, 1,0, True)
         self.dungeon = Dungeon(dungeon_rows, dungeon_cols, maze_width, maze_height, self.player)
         self.maze_width = maze_width
         self.maze_height = maze_height
@@ -211,15 +211,9 @@ class DungeonGUI:
     def run(self):
         running = True
         # self.dungeon.spawn_enemies(5)  # Spawn enemies in the dungeon
+        hovered_enemy = None
+        self.refresh()
         while running:
-            self.screen.fill((0, 0, 0))
-            maze = self.dungeon.current_maze()
-            self.draw_player_stats()
-            self.draw_maze(maze)
-            self.draw_player(self.player)
-            self.draw_minimap()
-            self.draw_chests()
-            self.draw_enemies(self.dungeon.enemies)
 
             mouse_pos = pygame.mouse.get_pos()
             hovered_enemy = None
@@ -229,7 +223,8 @@ class DungeonGUI:
                 elif event.type == pygame.KEYDOWN:
                     direction = DIRECTION_KEYS.get(event.key)
                     if direction:
-                        self.move_player(direction)
+                        secsess = self.move_player(direction)
+            self.refresh()
             # After handling events, check if mouse is over any enemy
             for enemy in self.dungeon.enemies:
                 enemy_rect = pygame.Rect(
@@ -242,12 +237,75 @@ class DungeonGUI:
                     break
             if hovered_enemy:
                 self.draw_enemy_info(hovered_enemy, mouse_pos)
-            pygame.display.flip()
+            self.win_check()
             self.eng_check()
             self.clock.tick(FPS)
 
         pygame.quit()
     
+    def refresh(self):
+        self.screen.fill((0, 0, 0))
+        maze = self.dungeon.current_maze()
+        self.draw_player_stats()
+        self.draw_maze(maze)
+        self.draw_player(self.player)
+        self.draw_minimap()
+        self.draw_chests()
+        self.draw_enemies(self.dungeon.enemies)
+        pygame.display.flip()
+    
+    def win_check(self):
+        font = pygame.font.SysFont("Arial", 48)
+        # Check if player is at an exit position in a corner room
+        # Exits are always in the middle cell of each corner room
+        exits = [
+            (0, 0, int(self.maze_height // 2), 0),  # top-left room, middle of left edge
+            (0, self.dungeon_cols - 1, int(self.maze_height // 2), self.maze_width - 1),  # top-right room, middle of right edge
+            (self.dungeon_rows - 1, 0, int(self.maze_height // 2), 0),  # bottom-left room, middle of left edge
+            (self.dungeon_rows - 1, self.dungeon_cols - 1, int(self.maze_height // 2), self.maze_width - 1),  # bottom-right room, middle of right edge
+        ]
+        player_room_row = self.dungeon.current_room_row
+        player_room_col = self.dungeon.current_room_col
+        player_y = self.dungeon.player.y
+        player_x = self.dungeon.player.x
+        at_exit = any(
+            (player_room_row == er and player_room_col == ec and player_y == ey and player_x == ex)
+            for er, ec, ey, ex in exits
+        )
+        if not at_exit:
+            return
+        text = font.render("You Win!", True, (0, 255, 0))
+        rect = text.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
+        self.screen.blit(text, rect)
+
+        # Draw Restart Button
+        button_font = pygame.font.SysFont("Arial", 36)
+        button_text = button_font.render("Restart", True, (255, 255, 255))
+        button_rect = pygame.Rect(0, 0, 200, 60)
+        button_rect.center = (self.screen.get_width() // 2, self.screen.get_height() // 2 + 100)
+        pygame.draw.rect(self.screen, (0, 128, 0), button_rect)
+        self.screen.blit(button_text, button_text.get_rect(center=button_rect.center))
+
+        pygame.display.flip()
+
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if button_rect.collidepoint(event.pos):
+                        # Reset other game variables
+                        self = DungeonGUI(
+                            dungeon_rows=self.dungeon_rows,
+                            dungeon_cols=self.dungeon_cols,
+                            maze_width=self.maze_width,
+                            maze_height=self.maze_height
+                        )
+                        return self.run()
+            pygame.time.wait(10)
+
     def eng_check(self):
         if self.dungeon.player.health <= 0:
             font = pygame.font.SysFont("Arial", 48)

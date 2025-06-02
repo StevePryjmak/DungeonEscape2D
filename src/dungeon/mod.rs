@@ -5,7 +5,7 @@ use crate::entity::Entity;
 use pyo3::prelude::*;
 use pyo3::Py;
 use pyo3::Python;
-use rand::Rng; // Add rand = "0.8" to Cargo.toml
+use rand::Rng;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::cmp::Ordering;
 
@@ -21,7 +21,7 @@ pub struct Dungeon {
     #[pyo3(get, set)]
     pub current_room_col: usize,
     #[pyo3(get, set)]
-    pub enemies: Vec<Entity>, // Add this field
+    pub enemies: Vec<Entity>,
 }
 
 #[pymethods]
@@ -47,19 +47,19 @@ impl Dungeon {
                     if on_top && on_left {
                         exits.push("left".to_string());
                         exits.push("bottom".to_string());
-                        exits.push("right".to_string()); // right is the only possible extra exit
+                        exits.push("right".to_string());
                     } else if on_top && on_right {
                         exits.push("right".to_string());
                         exits.push("bottom".to_string());
-                        exits.push("left".to_string()); // left is the only possible extra exit
+                        exits.push("left".to_string());
                     } else if on_bottom && on_left {
                         exits.push("left".to_string());
                         exits.push("top".to_string());
-                        exits.push("right".to_string()); // right is the only possible extra exit
+                        exits.push("right".to_string());
                     } else if on_bottom && on_right {
                         exits.push("right".to_string());
                         exits.push("top".to_string());
-                        exits.push("left".to_string()); // left is the only possible extra exit
+                        exits.push("left".to_string());
                     }
                 } else if on_top || on_bottom || on_left || on_right {
                     // Edge but not corner: 3 exits, no "final"
@@ -316,7 +316,6 @@ impl Dungeon {
     /// Player move, with enemy logic
     pub fn move_player(&mut self, direction: &str) -> PyResult<bool> {
         // Pre-fetch room dimensions to avoid double borrow
-        // Pre-fetch room dimensions to avoid double borrow
         let up_room_height = if self.current_room_row > 0 {
             self.mazes[self.current_room_row - 1][self.current_room_col].height
         } else { 0 };
@@ -359,8 +358,8 @@ impl Dungeon {
                         ChestContent::Gold { amount } => self.player.gold += amount as i32,
                         ChestContent::Sword { .. } => self.player.attack += 1,
                         ChestContent::Shield { .. } => self.player.armor += 1,
-                        ChestContent::Potion { .. } => self.player.health += 5, // or whatever logic
-                        ChestContent::Key { .. } => {/* handle key logic */},
+                        ChestContent::Potion { .. } => self.player.health += 5, 
+                        ChestContent::Key { .. } => {/* handle key logic later i few ides for keys*/},
                     }
                 }
                 // Remove chest from maze
