@@ -15,6 +15,8 @@ pub struct Entity {
     #[pyo3(get, set)]
     pub attack: i32,
     #[pyo3(get, set)]
+    pub gold: i32,
+    #[pyo3(get, set)]
     pub is_player: bool, // true for player, false for enemy
 }
 
@@ -27,9 +29,10 @@ impl Entity {
         health: i32,
         armor: i32,
         attack: i32,
+        gold: i32,
         is_player: bool,
     ) -> Self {
-        Entity { x, y, health, armor, attack, is_player }
+        Entity { x, y, health, armor, attack, gold, is_player }
     }
 
     pub fn move_to(&mut self, x: usize, y: usize) {
