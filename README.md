@@ -12,7 +12,5 @@ DungeonEscape2D/
 ├── python/              # Your Python code (scripts, tests, utils)
 │   ├── __init__.py
 │   └── main.py
-├── tests/               # Rust tests (optional)
-│   └── ...
 ├── README.md
 └── ...
