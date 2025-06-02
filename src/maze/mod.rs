@@ -1,24 +1,29 @@
-
 mod cell;
+pub mod chest;
 use pyo3::prelude::*;
 use cell::{Cell, Direction};
+use chest::{Chest, ChestContent};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use rand::Rng;
 
+
+// --- Maze code ---
 #[pyclass]
 #[derive(Clone, Debug)]
 pub struct Maze {
     pub width: usize,
     pub height: usize,
     pub grid: Vec<Vec<Cell>>,
+    #[pyo3(get)]
+    pub chests: Vec<Chest>,
 }
-
 #[pymethods]
 impl Maze {
     #[new]
     pub fn new(width: usize, height: usize) -> Self {
         let grid = vec![vec![Cell::new(); width]; height];
-        Maze { width, height, grid }
+        Maze { width, height, grid, chests: Vec::new() }
     }
 
     pub fn greet(&self) {
@@ -92,6 +97,7 @@ impl Maze {
         }
 
         self.add_exits(&exits)?;
+        self.spawn_chests();
         Ok(())
     }
 
@@ -118,7 +124,6 @@ impl Maze {
     }
 }
 
-// Move add_exits outside the #[pymethods] block
 impl Maze {
     fn add_exits(&mut self, exits: &[String]) -> PyResult<()> {
         let mid_row = self.height / 2;
@@ -136,6 +141,7 @@ impl Maze {
 
         Ok(())
     }
+
     pub fn can_move(&self, row: usize, col: usize, dir: usize) -> bool {
         if row >= self.height || col >= self.width {
             return false;
@@ -148,5 +154,31 @@ impl Maze {
             _ => return false,
         };
         !self.grid[row][col].has_wall(direction)
+    }
+
+    // Find dead ends and spawn chests there
+    fn spawn_chests(&mut self) {
+        let mut rng = thread_rng();
+        self.chests.clear();
+        for row in 0..self.height {
+            for col in 0..self.width {
+                let cell = &self.grid[row][col];
+                // Dead end: only one open wall
+                let open_walls = cell.walls.iter().filter(|&&w| !w).count();
+                if open_walls == 1 {
+                    // Randomly decide to spawn a chest (e.g., 50% chance)
+                    if rand::random::<f32>() < 0.5 {
+                        let contents = Some(match rand::random::<u8>() % 5 {
+                            0 => ChestContent::Gold { amount: rng.gen_range(10..=100) },
+                            1 => ChestContent::Sword { },
+                            2 => ChestContent::Shield { },
+                            3 => ChestContent::Potion { },
+                            _ => ChestContent::Key { },
+                        });
+                        self.chests.push(Chest::new(row, col, contents));
+                    }
+                }
+            }
+        }
     }
 }

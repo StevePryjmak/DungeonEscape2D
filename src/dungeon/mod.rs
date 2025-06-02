@@ -1,4 +1,6 @@
+
 use crate::maze::Maze;
+use crate::maze::chest::{Chest, ChestContent};
 use crate::entity::Entity;
 use pyo3::prelude::*;
 use pyo3::Py;
@@ -313,7 +315,22 @@ impl Dungeon {
 
     /// Player move, with enemy logic
     pub fn move_player(&mut self, direction: &str) -> PyResult<bool> {
-        let maze = &self.mazes[self.current_room_row][self.current_room_col];
+        // Pre-fetch room dimensions to avoid double borrow
+        // Pre-fetch room dimensions to avoid double borrow
+        let up_room_height = if self.current_room_row > 0 {
+            self.mazes[self.current_room_row - 1][self.current_room_col].height
+        } else { 0 };
+        let left_room_width = if self.current_room_col > 0 {
+            self.mazes[self.current_room_row][self.current_room_col - 1].width
+        } else { 0 };
+        let maze_width = self.mazes[self.current_room_row][self.current_room_col].width;
+        let maze_height = self.mazes[self.current_room_row][self.current_room_col].height;
+
+        // Pre-fetch all needed immutable values before mutable borrow
+        let maze_chests = self.mazes[self.current_room_row][self.current_room_col].chests.clone();
+        let maze_width = self.mazes[self.current_room_row][self.current_room_col].width;
+        let maze_height = self.mazes[self.current_room_row][self.current_room_col].height;
+
         let (dx, dy, dir_idx) = match direction {
             "up" => (0isize, -1isize, 0),
             "right" => (1, 0, 1),
@@ -325,25 +342,29 @@ impl Dungeon {
         let new_x = self.player.x as isize + dx;
         let new_y = self.player.y as isize + dy;
 
-        // Check if moving into enemy
-        if let Some(enemy) = self.enemies.iter_mut().find(|e| e.x as isize == new_x && e.y as isize == new_y) {
-            // Attack enemy
-            enemy.take_damage(self.player.attack);
-            if enemy.health <= 0 {
-                // Remove dead enemy
-                self.enemies.retain(|e| e.health > 0);
-            }
-            // Player does not move
-            self.enemy_attack_player();
-            self.move_enemies();
-            return Ok(true);
-        }
-
-        // Normal move
-        if new_x >= 0 && new_x < maze.width as isize && new_y >= 0 && new_y < maze.height as isize {
-            if maze.can_move(self.player.y, self.player.x, dir_idx) {
-                self.player.x = new_x as usize;
-                self.player.y = new_y as usize;
+        // Check for chest at the destination
+        if let Some(chest_idx) = maze_chests.iter().position(|c| c.col as isize == new_x && c.row as isize == new_y && !c.is_open) {
+            // Extract chest position before mutable borrow
+            let (chest_col, chest_row) = {
+                let chest = &maze_chests[chest_idx];
+                (chest.col, chest.row)
+            };
+            // Player is trying to move onto a chest: block movement, but allow collection
+            let maze = &mut self.mazes[self.current_room_row][self.current_room_col];
+            if is_adjacent(self.player.x, self.player.y, chest_col, chest_row, maze) && maze.can_move(self.player.y, self.player.x, dir_idx) {
+                let chest = &mut maze.chests[chest_idx];
+                if let Some(contents) = chest.open() {
+                    // Apply chest contents to player
+                    match contents {
+                        ChestContent::Gold { amount } => self.player.gold += amount as i32,
+                        ChestContent::Sword { .. } => self.player.attack += 1,
+                        ChestContent::Shield { .. } => self.player.armor += 1,
+                        ChestContent::Potion { .. } => self.player.health += 5, // or whatever logic
+                        ChestContent::Key { .. } => {/* handle key logic */},
+                    }
+                }
+                // Remove chest from maze
+                maze.chests.remove(chest_idx);
                 self.enemy_attack_player();
                 self.move_enemies();
                 return Ok(true);
@@ -352,15 +373,41 @@ impl Dungeon {
             }
         }
 
-        // Handle moving to another room via exit
+        // Check if moving into enemy
+        if let Some(enemy) = self.enemies.iter_mut().find(|e| e.x as isize == new_x && e.y as isize == new_y) {
+            enemy.take_damage(self.player.attack);
+            if enemy.health <= 0 {
+                self.enemies.retain(|e| e.health > 0);
+            }
+            self.enemy_attack_player();
+            self.move_enemies();
+            return Ok(true);
+        }
+
+        if new_x >= 0 && new_x < maze_width as isize && new_y >= 0 && new_y < maze_height as isize {
+            // Block movement if chest is present and not open
+            if maze_chests.iter().any(|c| c.col as isize == new_x && c.row as isize == new_y && !c.is_open) {
+                return Ok(false);
+            }
+            let maze = &mut self.mazes[self.current_room_row][self.current_room_col];
+            if maze.can_move(self.player.y, self.player.x, dir_idx) {
+                self.player.x = new_x as usize;
+                self.player.y = new_y as usize;
+                self.enemy_attack_player();
+                self.move_enemies();
+                return Ok(true);
+            }
+        }
+
+        // Room transition logic
         let (next_room_row, next_room_col, next_x, next_y) = match direction {
             "up" if self.player.y == 0 && self.current_room_row > 0 => (
                 self.current_room_row - 1,
                 self.current_room_col,
                 self.player.x,
-                self.mazes[self.current_room_row - 1][self.current_room_col].height - 1,
+                up_room_height - 1,
             ),
-            "down" if self.player.y + 1 == maze.height && self.current_room_row + 1 < self.mazes.len() => (
+            "down" if self.player.y + 1 == maze_height && self.current_room_row + 1 < self.mazes.len() => (
                 self.current_room_row + 1,
                 self.current_room_col,
                 self.player.x,
@@ -369,10 +416,10 @@ impl Dungeon {
             "left" if self.player.x == 0 && self.current_room_col > 0 => (
                 self.current_room_row,
                 self.current_room_col - 1,
-                self.mazes[self.current_room_row][self.current_room_col - 1].width - 1,
+                left_room_width - 1,
                 self.player.y,
             ),
-            "right" if self.player.x + 1 == maze.width && self.current_room_col + 1 < self.mazes[0].len() => (
+            "right" if self.player.x + 1 == maze_width && self.current_room_col + 1 < self.mazes[0].len() => (
                 self.current_room_row,
                 self.current_room_col + 1,
                 0,
@@ -381,15 +428,13 @@ impl Dungeon {
             _ => return Ok(false),
         };
 
-        // Check if exit is open in current maze
+        let maze = &mut self.mazes[self.current_room_row][self.current_room_col];
         if maze.can_move(self.player.y, self.player.x, dir_idx) {
             self.current_room_row = next_room_row;
             self.current_room_col = next_room_col;
             self.player.x = next_x;
             self.player.y = next_y;
-            // Spawn enemies when entering a new room
-            // let floor = manhattan(self.current_room_col, self.current_room_row, , spawn_row);
-            self.spawn_enemies(3); // You can adjust the number as needed
+            self.spawn_enemies(3);
             Ok(true)
         } else {
             Ok(false)

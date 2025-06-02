@@ -148,6 +148,19 @@ class DungeonGUI:
                 if walls[3]:
                     pygame.draw.line(self.screen, (255, 255, 255), (x, y), (x, y + CELL_SIZE), WALL_THICKNESS)
 
+    def draw_chests(self):
+    # Load chest image once and cache it
+        if not hasattr(self, "chest_image"):
+            path = ICON_PATH + "chest_closed.png"
+            img = pygame.image.load(path).convert_alpha()
+            self.chest_image = pygame.transform.smoothscale(img, (CELL_SIZE, CELL_SIZE))
+        for chest in self.dungeon.current_maze().chests:
+            # Only draw closed chests
+            if not chest.is_open:
+                x = PADDING + chest.col * CELL_SIZE
+                y = self.stats_height + PADDING + chest.row * CELL_SIZE
+                self.screen.blit(self.chest_image, (x, y))
+    
     def draw_player(self, player):
         # Load hero image once and cache it
         if not hasattr(self, "hero_image"):
@@ -205,6 +218,7 @@ class DungeonGUI:
             self.draw_maze(maze)
             self.draw_player(self.player)
             self.draw_minimap()
+            self.draw_chests()
             self.draw_enemies(self.dungeon.enemies)
 
             mouse_pos = pygame.mouse.get_pos()
