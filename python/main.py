@@ -1,5 +1,5 @@
 import pygame
-from dungeon_core import Dungeon, Player  # Rust module
+from dungeon_core import Dungeon, Entity  # Rust module
 
 CELL_SIZE = 40
 WALL_THICKNESS = 3
@@ -22,7 +22,7 @@ DIRECTION_KEYS = {
 
 class DungeonGUI:
     def __init__(self, dungeon_rows, dungeon_cols, maze_width, maze_height):
-        self.player = Player(int(maze_height/2), int(maze_width/2), 100)
+        self.player = Entity(int(maze_height/2), int(maze_width/2), 100, 0, 1, True)
         self.dungeon = Dungeon(dungeon_rows, dungeon_cols, maze_width, maze_height, self.player)
         self.maze_width = maze_width
         self.maze_height = maze_height

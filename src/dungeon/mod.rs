@@ -1,5 +1,5 @@
 use crate::maze::Maze;
-use crate::player::Player;
+use crate::entity::Entity;
 use pyo3::prelude::*;
 use pyo3::Py;
 use pyo3::Python;
@@ -12,7 +12,7 @@ pub struct Dungeon {
     #[pyo3(get, set)]
     pub mazes: Vec<Vec<Maze>>, // 2D grid of maze rooms
     #[pyo3(get, set)]
-    pub player: Player,
+    pub player: Entity, // Player entity in the dungeon
     #[pyo3(get, set)]
     pub current_room_row: usize,
     #[pyo3(get, set)]
@@ -23,7 +23,7 @@ pub struct Dungeon {
 #[pymethods]
 impl Dungeon {
     #[new]
-    pub fn new(rows: usize, cols: usize, maze_width: usize, maze_height: usize, player: Player) -> Self {
+    pub fn new(rows: usize, cols: usize, maze_width: usize, maze_height: usize, player: Entity) -> Self {
         let mut mazes = Vec::with_capacity(rows);
         for r in 0..rows {
             let mut row_vec = Vec::with_capacity(cols);
