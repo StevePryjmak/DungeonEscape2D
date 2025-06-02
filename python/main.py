@@ -8,7 +8,6 @@ PADDING = 20
 FPS = 60
 
 PLAYER_COLOR = (0, 255, 0)
-PLAYER_RADIUS = CELL_SIZE // 3
 
 MINIMAP_ROOM_SIZE = 20
 MINIMAP_PADDING = 30
@@ -24,7 +23,7 @@ DIRECTION_KEYS = {
 
 class DungeonGUI:
     def __init__(self, dungeon_rows, dungeon_cols, maze_width, maze_height):
-        self.player = Entity(int(maze_height/2), int(maze_width/2), 100, 0, 1,0, True)
+        self.player = Entity(int(maze_height/2), int(maze_width/2), 1, 0, 1,0, True)
         self.dungeon = Dungeon(dungeon_rows, dungeon_cols, maze_width, maze_height, self.player)
         self.maze_width = maze_width
         self.maze_height = maze_height
